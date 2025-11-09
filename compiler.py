@@ -37,9 +37,9 @@ class TNode:
         pass
 
 class Constant(TNode):
-    def __init__(self, type, val):
+    def __init__(self, type, value):
         self.type = type
-        self.val = val
+        self.value = value
     
 
 class Identifier(TNode):
@@ -92,13 +92,45 @@ while i < len(chunks):
             i += 1
         TREE[-1].right = break_down(statement)
         i += 1
+    elif c == "return":
+        i += 1
+        statement = []
+        while chunks[i] != ";":
+            statement.append(chunks[i])
+            i += 1
+        TREE.append(Return(break_down(statement)))
+        i += 1
     else:
         i += 1
 
+
+output_asm = """section .text
+global _start
+
+_start:
+"""
+
+def generate_statement(ident : TNode) -> str:
+    if (isinstance(ident, Constant)):
+        return f"mov eax, {str(ident.value)}\n"
+    elif (isinstance(ident, Identifier)):
+        pass
+    elif (isinstance(ident, Operation)):
+        match (ident.operator):
+            case "+":
+                pass
+    
 objprint.op(TREE)
 
-# with open(sys.argv[2], "w", encoding="utf-8") as output_file:
-#     output_file.flush()
-#     for t in tokens:
-#         # if t == 
-#         pass
+for node in TREE:
+    if isinstance(node, Assignment):
+        pass
+
+
+    elif isinstance(node, Return):
+        output_asm += "\t" + generate_statement(node.value)
+        output_asm += "ret\n"
+
+with open(sys.argv[2], "w", encoding="utf-8") as output_file:
+    output_file.flush()
+    output_file.write(output_asm)
