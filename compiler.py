@@ -73,7 +73,7 @@ i = 0
 
 def break_down(statement):
     if len(statement) > 2:
-        operation = Operation(statement[1], statement[0], None)
+        operation = Operation(statement[1], break_down(statement[:1]), None)
         operation.right = break_down(statement[2:])
         return operation
     else:
@@ -110,22 +110,33 @@ global _start
 _start:
 """
 
+def generate_operator(operator):
+    out = ""
+    match operator:
+        case "+":
+            out = "add"
+    return out
+
 def generate_statement(ident : TNode) -> str:
     if (isinstance(ident, Constant)):
-        return f"mov eax, {str(ident.value)}\n"
+        return "mov eax, " + str(ident.value) + " \n"
     elif (isinstance(ident, Identifier)):
         pass
     elif (isinstance(ident, Operation)):
-        match (ident.operator):
-            case "+":
-                pass
+        asm = generate_statement(ident.left)
+        asm += "push eax\n"
+        asm += generate_statement(ident.right)
+        asm += "pop ebx\n"
+        asm += generate_operator(ident.operator) + " eax, ebx\n"
+        return asm
     
 objprint.op(TREE)
 
 for node in TREE:
     if isinstance(node, Assignment):
         pass
-
+    elif isinstance(node, Operation):
+        output_asm += "\t" + generate_statement(node)
 
     elif isinstance(node, Return):
         output_asm += "\t" + generate_statement(node.value)
