@@ -42,6 +42,8 @@ class Constant(TNode):
         self.value = value
     
 
+existing_identifiers = []
+
 class Identifier(TNode):
     def __init__(self, name):
         self.name = name
@@ -77,17 +79,21 @@ def break_down(statement):
         operation.right = break_down(statement[2:])
         return operation
     else:
-        return Constant("int", statement[0])
+        if (statement[0][0].isalpha()):
+            return Identifier(statement[0])
+        else:
+            return Constant("int", statement[0])
 
 
 while i < len(chunks):
     c = chunks[i]
     if c == "let":
         ident = Identifier(chunks[i + 1])
+        existing_identifiers.append(ident.name)
         TREE.append(Assignment(ident, None))
         i += 3
         statement = []
-        while chunks[i] != ";":
+        while i < len(chunks) and chunks[i] not in ";\n":
             statement.append(chunks[i])
             i += 1
         TREE[-1].right = break_down(statement)
@@ -95,7 +101,7 @@ while i < len(chunks):
     elif c == "return":
         i += 1
         statement = []
-        while chunks[i] != ";":
+        while i < len(chunks) and chunks[i] not in ";\n":
             statement.append(chunks[i])
             i += 1
         TREE.append(Return(break_down(statement)))
@@ -103,45 +109,57 @@ while i < len(chunks):
     else:
         i += 1
 
+output_section_bss = """section .bss
+"""
 
-output_asm = """section .text
+output_section_text = """
+section .text
 global _start
 
 _start:
 """
 
+for identifier in existing_identifiers:
+    output_section_bss += identifier + " resb 4\n"
+
 def generate_operator(operator):
-    out = ""
+    out = "MISSING OPERATOR FOR " + operator
     match operator:
         case "+":
             out = "add"
     return out
 
 def generate_statement(ident : TNode) -> str:
-    if (isinstance(ident, Constant)):
+    if isinstance(ident, Constant):
         return "mov eax, " + str(ident.value) + " \n"
-    elif (isinstance(ident, Identifier)):
-        pass
-    elif (isinstance(ident, Operation)):
+    
+    elif isinstance(ident, Identifier):
+        return "mov eax, [" + ident.name + "]\n"
+    
+    elif isinstance(ident, Operation):
         asm = generate_statement(ident.left)
         asm += "push eax\n"
         asm += generate_statement(ident.right)
         asm += "pop ebx\n"
         asm += generate_operator(ident.operator) + " eax, ebx\n"
         return asm
+    elif isinstance(ident, Assignment):
+        asm = generate_statement(ident.right)
+        asm += "mov [" + ident.left.name + "], eax\n"
+        return asm
     
+
 objprint.op(TREE)
 
 for node in TREE:
-    if isinstance(node, Assignment):
-        pass
-    elif isinstance(node, Operation):
-        output_asm += "\t" + generate_statement(node)
+    if isinstance(node, Assignment) or isinstance(node, Operation):
+        output_section_text += "\t" + generate_statement(node)
 
     elif isinstance(node, Return):
-        output_asm += "\t" + generate_statement(node.value)
-        output_asm += "ret\n"
+        output_section_text += "\t" + generate_statement(node.value)
+        output_section_text += "ret\n"
 
 with open(sys.argv[2], "w", encoding="utf-8") as output_file:
     output_file.flush()
-    output_file.write(output_asm)
+    output_file.write(output_section_bss)
+    output_file.write(output_section_text)
