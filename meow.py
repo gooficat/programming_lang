@@ -64,9 +64,33 @@ class Return(TNode):
         self.value = value
 
 class FuncDef(TNode):
-    def __init__(self, name, body):
+    def __init__(self, name : str, body):
         self.name = name
         self.body = body
+
+
+ops = [
+    '+',
+    '-',
+    '*',
+    '/'
+]
+
+def parse_operation(inp):
+    if not isinstance(inp, TNode):
+        if len(inp) == 1:
+            return Constant('int', inp[0])
+        for o in ops:
+            if o in inp:
+                ol = inp.index(o)
+                return Operation(
+                    o,
+                    parse_operation(inp[:ol]),
+                    parse_operation(inp[ol+1:])
+                )
+    else:
+        print("that's not good")
+
 
 TREE = []
 
@@ -75,8 +99,7 @@ i = 0
 
 def break_down(statement):
     if len(statement) > 2:
-        operation = Operation(statement[1], break_down(statement[:1]), None)
-        operation.right = break_down(statement[2:])
+        operation = parse_operation(statement)
         return operation
     else:
         if (statement[0][0].isalpha()):
@@ -122,11 +145,17 @@ _start:
 for identifier in existing_identifiers:
     output_section_bss += identifier + " resb 4\n"
 
-def generate_operator(operator):
-    out = "MISSING OPERATOR FOR " + operator
-    match operator:
+def generate_operation(operation : Operation) -> str:
+    out = "NO OPERATOR FOR " + operation.operator
+    match operation.operator:
         case "+":
-            out = "add"
+            out = "add eax, ebx"
+        case "-":
+            out = "sub eax, ebx"
+        case "*":
+            out = "imul eax, ebx"
+        case "/":
+            out = "idiv eax, ebx"
     return out
 
 def generate_statement(ident : TNode) -> str:
@@ -141,22 +170,23 @@ def generate_statement(ident : TNode) -> str:
         asm += "push eax\n"
         asm += generate_statement(ident.right)
         asm += "pop ebx\n"
-        asm += generate_operator(ident.operator) + " eax, ebx\n"
+        asm += generate_operation(ident) + "\n"
         return asm
     elif isinstance(ident, Assignment):
         asm = generate_statement(ident.right)
         asm += "mov [" + ident.left.name + "], eax\n"
         return asm
-    
+    else:
+        exit(2)
 
 objprint.op(TREE)
 
 for node in TREE:
     if isinstance(node, Assignment) or isinstance(node, Operation):
-        output_section_text += "\t" + generate_statement(node)
+        output_section_text += generate_statement(node)
 
     elif isinstance(node, Return):
-        output_section_text += "\t" + generate_statement(node.value)
+        output_section_text += generate_statement(node.value)
         output_section_text += "ret\n"
 
 with open(sys.argv[2], "w", encoding="utf-8") as output_file:
