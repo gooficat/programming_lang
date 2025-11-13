@@ -79,7 +79,10 @@ ops = [
 def parse_operation(inp):
     if not isinstance(inp, TNode):
         if len(inp) == 1:
-            return Constant('int', inp[0])
+            if (statement[0][0].isalpha()):
+                return Identifier(statement[0])
+            elif statement[0].isdigit():
+                return Constant("int", statement[0])
         for o in ops:
             if o in inp:
                 ol = inp.index(o)
@@ -96,18 +99,6 @@ TREE = []
 
 i = 0
 
-
-def break_down(statement):
-    if len(statement) > 2:
-        operation = parse_operation(statement)
-        return operation
-    else:
-        if (statement[0][0].isalpha()):
-            return Identifier(statement[0])
-        else:
-            return Constant("int", statement[0])
-
-
 while i < len(chunks):
     c = chunks[i]
     if c == "let":
@@ -119,7 +110,7 @@ while i < len(chunks):
         while i < len(chunks) and chunks[i] not in ";\n":
             statement.append(chunks[i])
             i += 1
-        TREE[-1].right = break_down(statement)
+        TREE[-1].right = parse_operation(statement)
         i += 1
     elif c == "return":
         i += 1
@@ -127,7 +118,7 @@ while i < len(chunks):
         while i < len(chunks) and chunks[i] not in ";\n":
             statement.append(chunks[i])
             i += 1
-        TREE.append(Return(break_down(statement)))
+        TREE.append(Return(parse_operation(statement)))
         i += 1
     else:
         i += 1
