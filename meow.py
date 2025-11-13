@@ -37,9 +37,10 @@ class TNode:
         pass
 
 class Constant(TNode):
-    def __init__(self, type, value):
+    def __init__(self, type, value, reg):
         self.type = type
         self.value = value
+        self.reg = reg
     
 
 existing_identifiers = []
@@ -47,6 +48,11 @@ existing_identifiers = []
 class Identifier(TNode):
     def __init__(self, name):
         self.name = name
+
+class IdentifierAccess(TNode):
+    def __init__(self, name, reg):
+        self.name = name
+        self.reg = reg
 
 class Assignment(TNode):
     def __init__(self, left, right):
@@ -58,6 +64,8 @@ class Operation(TNode):
         self.operator = operator
         self.left = left
         self.right = right
+        self.regleft = "eax"
+        self.regright = "ebx"
 
 class Return(TNode):
     def __init__(self, value):
