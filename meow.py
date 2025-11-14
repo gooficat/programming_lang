@@ -11,11 +11,18 @@ with open(sys.argv[1], "r", encoding="utf-8-sig") as input_file:
 
 chunks = []
 
+allowed_prefixes = [
+    "_"
+]
+
 i = 0
 while i < len(input_content):
     c = input_content[i]
-    if c.isalpha():
+    if c.isalpha() or c in allowed_prefixes:
         buf = ""
+        if not c[0].isalpha():
+            buf += input_content[i]
+            i += 1
         while i < len(input_content) and input_content[i].isalpha():
             buf += input_content[i]
             i += 1
@@ -63,10 +70,21 @@ class Exit(TNode):
     def __init__(self, value):
         self.value = value
 
-class FuncDef(TNode):
-    def __init__(self, name : str, body):
-        self.name = name
+class Scope(TNode):
+    def __init__(self, body : list):
         self.body = body
+
+class FuncDef(Scope):
+    def __init__(self, name : str, params : list, body : list):
+        super().__init__(body)
+        self.name = name
+        self.params = []
+
+class FuncCall(TNode):
+    def __init__(self, name : str, params : list):
+        super().__init__()
+        self.name = name
+        self.params = params
 
 class AssemblyBlock(TNode):
     def __init__(self, content):
@@ -86,10 +104,10 @@ ops = [ # strictly by order of priority
 def parse_operation(inp):
     if not isinstance(inp, TNode):
         if len(inp) == 1:
-            if (statement[0][0].isalpha()):
-                return Identifier(statement[0])
-            elif statement[0].isdigit():
-                return Constant("int", statement[0])
+            if inp[0][0].isalpha():
+                return Identifier(inp[0])
+            elif inp[0][0].isdigit():
+                return Constant("int", inp[0])
         for o in ops:
             if o in inp:
                 ol = inp.index(o)
@@ -99,47 +117,95 @@ def parse_operation(inp):
                     parse_operation(inp[ol+1:])
                 )
     else:
-        print("tried to parse an operation that isnt a tree node??? that's not good...")
+        print("tried to parse an operation that is a tree node??? that's not good...")
 
 
-TREE = []
 
-i = 0
-
-while i < len(chunks):
-    c = chunks[i]
-    if c == "let":
-        ident = Identifier(chunks[i + 1])
-        existing_identifiers.append(ident.name)
-        TREE.append(Assignment(ident, None))
-        i += 3
-        statement = []
-        while i < len(chunks) and chunks[i] not in ";\n":
-            statement.append(chunks[i])
-            i += 1
-        TREE[-1].right = parse_operation(statement)
-        i += 1
-    elif c == "exit":
-        i += 1
-        statement = []
-        while i < len(chunks) and chunks[i] not in ";\n":
-            statement.append(chunks[i])
-            i += 1
-        TREE.append(Exit(parse_operation(statement)))
-        i += 1
-    elif c == "asm":
-        i += 2
-        block = "\n"
-        while i < len(chunks) and chunks[i] != "}":
-            while chunks[i] not in ";\n":
-                block += chunks[i] + " "
+def parse_chunks(chunks):
+    tr = []
+    i = 0
+    while i < len(chunks):
+        c = chunks[i]
+        if c == "let":
+            ident = Identifier(chunks[i + 1])
+            existing_identifiers.append(ident.name)
+            if chunks[i + 2] == "=":
+                tr.append(Assignment(ident, None))
+                i += 3
+                statement = []
+                while i < len(chunks) and chunks[i] not in ";\n":
+                    statement.append(chunks[i])
+                    i += 1
+                tr[-1].right = parse_operation(statement)
                 i += 1
-            block += chunks[i]
+            else:
+                i += 3
+        elif c == "exit":
             i += 1
-        
-        TREE.append(AssemblyBlock(block))
-    else:
-        i += 1
+            statement = []
+            while i < len(chunks) and chunks[i] not in ";\n":
+                statement.append(chunks[i])
+                i += 1
+            tr.append(Exit(parse_operation(statement)))
+            i += 1
+        elif c == "asm":
+            i += 2
+            block = "\n"
+            while i < len(chunks) and chunks[i] != "}":
+                while chunks[i] not in ";\n":
+                    block += chunks[i] + " "
+                    i += 1
+                block += chunks[i]
+                i += 1
+            
+            tr.append(AssemblyBlock(block))
+        elif c == "func":
+            i += 1
+            name = chunks[i]
+            existing_identifiers.append(name)
+            i += 2
+            params = []
+            while chunks[i] != ")":
+                params.append(chunks[i])
+                i += 1
+            i += 2
+            body = []
+            while chunks[i] != "}":
+                body.append(chunks[i])
+                i += 1
+            tr.append(
+                FuncDef(
+                    name,
+                    params,
+                    parse_chunks(body)
+                )
+            )
+        elif c in existing_identifiers:
+            ident = Identifier(c)
+            if chunks[i + 1] == "=":
+                tr.append(Assignment(ident, None))
+                i += 2
+                statement = []
+                while i < len(chunks) and chunks[i] not in ";\n":
+                    statement.append(chunks[i])
+                    i += 1
+                tr[-1].right = parse_operation(statement)
+                i += 1
+            else:
+                params = []
+                i += 1
+                while i < len(chunks) and chunks[i] not in ")":
+                    params.append(chunks[i])
+                    i += 1
+                tr.append(FuncCall(ident.name, params))
+                i += 1
+        else:
+            i += 1
+    return tr
+
+
+TREE = Scope(parse_chunks(chunks))
+
 
 output_section_bss = """section .bss
 """
@@ -149,7 +215,6 @@ output_section_text = """
 section .text
 global _start
 
-_start:
 """
 
 for identifier in existing_identifiers:
@@ -187,20 +252,39 @@ def generate_statement(ident : TNode) -> str:
         asm += "mov [" + ident.left.name + "], eax\n"
         return asm
     else:
-        exit(2)
+        return ""
 
 objprint.op(TREE)
 
-for node in TREE:
-    if isinstance(node, Assignment) or isinstance(node, Operation):
-        output_section_text += generate_statement(node)
+def parse_scope(scope) -> str:
+    output = ""
+    nodes = scope.body
+    global output_section_data
+    global output_section_bss
+    for node in nodes:
+        if isinstance(node, Assignment) or isinstance(node, Operation):
+            output += generate_statement(node)
 
-    elif isinstance(node, Exit):
-        output_section_text += generate_statement(node.value)
-        output_section_text += "ret\n"
+        elif isinstance(node, Exit):
+            output += generate_statement(node.value)
+            output += "ret\n"
 
-    elif isinstance(node, AssemblyBlock):
-        output_section_text += node.content
+        elif isinstance(node, AssemblyBlock):
+            output += node.content
+
+        elif isinstance(node, FuncDef):
+            output += "_" + node.name + ":\n"
+            output += parse_scope(node)
+
+        elif isinstance(node, FuncCall):
+            # !!!TODO!!! push the params from node.params to the parameter stack
+            output += "call " + "_" + node.name + "\n"
+        else:
+            print("!!!!!!!! NODE NOT HANDLED BY COMPILER !!!!!!!!")
+    return output
+
+
+output_section_text += parse_scope(TREE)
 
 with open(sys.argv[2], "w", encoding="utf-8") as output_file:
     output_file.flush()

@@ -3,7 +3,8 @@
     "scopeName": "source.meowLang",
     "patterns": [
         { "include": "#keywords" },
-        { "include": "#numbers" }
+        { "include": "#numbers" },
+        { "include": "#entities" }
     ],
     "repository": {
         "keywords": {
@@ -13,15 +14,39 @@
                     "match": "\\b(let)\\b"
                 },
                 {
-                    "name": "keyword.asm.meowLang",
-                    "match": "\\b(asm)\\b"
-                },
-                {
-                    "name": "keyword.exit.meowLang",
+                    "name": "keyword.other.exit.meowLang",
                     "match": "\\b(exit)\\b"
                 },
                 {
-                    "name": "keyword.func.meowLang",
+                    "name": "keyword.operator.add.meowLang",
+                    "match": "\\+"
+                },
+                {
+                    "name": "keyword.operator.sub.meowLang",
+                    "match": "-"
+                },
+                {
+                    "name": "keyword.operator.mul.meowLang",
+                    "match": "\\*"
+                },
+                {
+                    "name": "keyword.operator.div.meowLang",
+                    "match": "/"
+                },
+                {
+                    "name": "keyword.operator.mov.meowLang",
+                    "match": "="
+                }
+            ]
+        },
+        "entities": {
+            "patterns": [
+                {
+                    "name": "entity.name.tag.asm.meowLang",
+                    "match": "\\b(asm)\\b"
+                },
+                {
+                    "name": "entity.name.func.meowLang",
                     "match": "\\b(func)\\b"
                 }
             ]

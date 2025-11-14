@@ -1,14 +1,15 @@
-let x = 3;
+let x;
 
-x = x * 3 + 3;
-
-let v = 2;
-
-asm {
-    xor eax, eax
-    mov eax, [x]
-    add eax, 4
-    mov [x], eax
+func go() {
+    x = x + 100;
+    exit 0;
 }
 
-exit x + v;
+
+func start() {
+    x = 220;
+
+    go();
+
+    exit x;
+}

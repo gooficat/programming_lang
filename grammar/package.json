@@ -1,8 +1,12 @@
 {
     "name": "meowlanggrammar",
     "version": "0.0.1",
+    "description": "A vscode extension for gooficat's custom language",
     "engines": {
         "vscode": "^1.22.0"
+    },
+    "repository": {
+        
     },
     "contributes": {
         "languages": [
@@ -13,7 +17,8 @@
                 ],
                 "extensions": [
                     ".meow"
-                ]
+                ],
+                "configuration": "./language-configuration.json"
             }
         ],
         "grammars": [
