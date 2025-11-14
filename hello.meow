@@ -1,13 +1,9 @@
 let x;
 
-func go() {
-    x = x + 100;
-    exit 0;
-}
 
 
 func start() {
-    x = 220;
+    x = 2 ^ 3;
 
     go();
 

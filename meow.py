@@ -15,11 +15,22 @@ allowed_prefixes = [
     "_"
 ]
 
+
+ops = [ # strictly by order of priority
+    '+',
+    '-',
+    '*',
+    '/',
+    '^'
+
+]
+
+
 i = 0
 while i < len(input_content):
     c = input_content[i]
+    buf = ""
     if c.isalpha() or c in allowed_prefixes:
-        buf = ""
         if not c[0].isalpha():
             buf += input_content[i]
             i += 1
@@ -27,16 +38,21 @@ while i < len(input_content):
             buf += input_content[i]
             i += 1
     elif c.isdigit():
-        buf = ""
         while i < len(input_content) and input_content[i].isdigit():
             buf += input_content[i]
             i += 1
-    elif not c in '\r ':
-        buf = c
-        i += 1
+    elif not c in '\r \t\n':
+        if input_content[i:i+2] in ops:
+            buf = input_content[i:i+2]
+            i += 2
+        else:
+            buf = input_content[i]
+            i += 1
     else:
         i += 1
         continue
+
+    # print(buf)
     chunks.append(buf)
 
 class TNode:
@@ -49,7 +65,9 @@ class Constant(TNode):
         self.value = value
     
 
-existing_identifiers = []
+# existing_identifiers = []
+static_variable_identifiers = []
+function_identifiers = []
 
 class Identifier(TNode):
     def __init__(self, name):
@@ -94,13 +112,6 @@ class NewLine(TNode):
     def __init__(self):
         super().__init__()
 
-ops = [ # strictly by order of priority
-    '+',
-    '-',
-    '*',
-    '/'
-]
-
 def parse_operation(inp):
     if not isinstance(inp, TNode):
         if len(inp) == 1:
@@ -112,9 +123,9 @@ def parse_operation(inp):
             if o in inp:
                 ol = inp.index(o)
                 return Operation(
-                    o,
+                    inp[ol],
                     parse_operation(inp[:ol]),
-                    parse_operation(inp[ol+1:])
+                    parse_operation(inp[ol+len(o):])
                 )
     else:
         print("tried to parse an operation that is a tree node??? that's not good...")
@@ -128,7 +139,7 @@ def parse_chunks(chunks):
         c = chunks[i]
         if c == "let":
             ident = Identifier(chunks[i + 1])
-            existing_identifiers.append(ident.name)
+            static_variable_identifiers.append(ident.name)
             if chunks[i + 2] == "=":
                 tr.append(Assignment(ident, None))
                 i += 3
@@ -162,7 +173,7 @@ def parse_chunks(chunks):
         elif c == "func":
             i += 1
             name = chunks[i]
-            existing_identifiers.append(name)
+            function_identifiers.append(name)
             i += 2
             params = []
             while chunks[i] != ")":
@@ -180,7 +191,7 @@ def parse_chunks(chunks):
                     parse_chunks(body)
                 )
             )
-        elif c in existing_identifiers:
+        elif c in static_variable_identifiers:
             ident = Identifier(c)
             if chunks[i + 1] == "=":
                 tr.append(Assignment(ident, None))
@@ -191,14 +202,15 @@ def parse_chunks(chunks):
                     i += 1
                 tr[-1].right = parse_operation(statement)
                 i += 1
-            else:
-                params = []
+        elif c in function_identifiers:
+            ident = Identifier(c)
+            params = []
+            i += 2
+            while i < len(chunks) and chunks[i] not in ")":
+                params.append(chunks[i])
                 i += 1
-                while i < len(chunks) and chunks[i] not in ")":
-                    params.append(chunks[i])
-                    i += 1
-                tr.append(FuncCall(ident.name, params))
-                i += 1
+            tr.append(FuncCall(ident.name, params))
+            i += 1
         else:
             i += 1
     return tr
@@ -216,24 +228,46 @@ section .text
 global _start
 
 """
+internal_labels = 0
 
-for identifier in existing_identifiers:
+for identifier in static_variable_identifiers:
     output_section_bss += identifier + " resb 4\n"
 
-def generate_operation(operation : Operation) -> str:
+def generate_operation(operation : Operation, r1 = "eax", r2="ebx") -> str:
+    global internal_labels
     out = "NO OPERATOR FOR " + operation.operator
     match operation.operator:
         case "+":
-            out = "add eax, ebx"
+            out = f"add {r1}, {r2}"
         case "-":
-            out = "sub eax, ebx"
+            out = f"sub {r1}, {r2}"
         case "*":
-            out = "imul eax, ebx"
+            out = f"imul {r1}, {r2}"
         case "/":
-            out = "idiv eax, ebx"
+            out = f"idiv {r1}, {r2}"
+        case "^":
+            # print(operation.right.value)
+            out = \
+f"""
+mov ecx, {r1}
+mov edx, {r2}
+label_{internal_labels}:
+imul {r2}, edx
+sub ecx, 1
+cmp ecx, 1
+jne label_{internal_labels}
+mov eax, ebx"""
+            internal_labels += 1
     return out
 
-def generate_statement(ident : TNode) -> str:
+regs = { # whether it is reserved or not
+    "eax": False,
+    "ebx": False,
+    "ecx": False,
+    "edx": False
+}
+
+def generate_statement(ident : TNode, rec_depth = 0) -> str:
     if isinstance(ident, Constant):
         return "mov eax, " + str(ident.value) + " \n"
     
@@ -241,9 +275,9 @@ def generate_statement(ident : TNode) -> str:
         return "mov eax, [" + ident.name + "]\n"
     
     elif isinstance(ident, Operation):
-        asm = generate_statement(ident.left)
+        asm = generate_statement(ident.left, rec_depth+1)
         asm += "push eax\n"
-        asm += generate_statement(ident.right)
+        asm += generate_statement(ident.right, rec_depth+1)
         asm += "pop ebx\n"
         asm += generate_operation(ident) + "\n"
         return asm
@@ -254,7 +288,7 @@ def generate_statement(ident : TNode) -> str:
     else:
         return ""
 
-objprint.op(TREE)
+# objprint.op(TREE)
 
 def parse_scope(scope) -> str:
     output = ""
