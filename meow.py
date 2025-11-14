@@ -24,7 +24,7 @@ while i < len(input_content):
         while i < len(input_content) and input_content[i].isdigit():
             buf += input_content[i]
             i += 1
-    elif not c in '\r \n':
+    elif not c in '\r ':
         buf = c
         i += 1
     else:
@@ -59,7 +59,7 @@ class Operation(TNode):
         self.left = left
         self.right = right
 
-class Return(TNode):
+class Exit(TNode):
     def __init__(self, value):
         self.value = value
 
@@ -68,8 +68,15 @@ class FuncDef(TNode):
         self.name = name
         self.body = body
 
+class AssemblyBlock(TNode):
+    def __init__(self, content):
+        self.content = content
 
-ops = [
+class NewLine(TNode):
+    def __init__(self):
+        super().__init__()
+
+ops = [ # strictly by order of priority
     '+',
     '-',
     '*',
@@ -92,7 +99,7 @@ def parse_operation(inp):
                     parse_operation(inp[ol+1:])
                 )
     else:
-        print("that's not good")
+        print("tried to parse an operation that isnt a tree node??? that's not good...")
 
 
 TREE = []
@@ -112,20 +119,32 @@ while i < len(chunks):
             i += 1
         TREE[-1].right = parse_operation(statement)
         i += 1
-    elif c == "return":
+    elif c == "exit":
         i += 1
         statement = []
         while i < len(chunks) and chunks[i] not in ";\n":
             statement.append(chunks[i])
             i += 1
-        TREE.append(Return(parse_operation(statement)))
+        TREE.append(Exit(parse_operation(statement)))
         i += 1
+    elif c == "asm":
+        i += 2
+        block = "\n"
+        while i < len(chunks) and chunks[i] != "}":
+            while chunks[i] not in ";\n":
+                block += chunks[i] + " "
+                i += 1
+            block += chunks[i]
+            i += 1
+        
+        TREE.append(AssemblyBlock(block))
     else:
         i += 1
 
 output_section_bss = """section .bss
 """
-
+output_section_data = """section .data
+"""
 output_section_text = """
 section .text
 global _start
@@ -176,11 +195,15 @@ for node in TREE:
     if isinstance(node, Assignment) or isinstance(node, Operation):
         output_section_text += generate_statement(node)
 
-    elif isinstance(node, Return):
+    elif isinstance(node, Exit):
         output_section_text += generate_statement(node.value)
         output_section_text += "ret\n"
+
+    elif isinstance(node, AssemblyBlock):
+        output_section_text += node.content
 
 with open(sys.argv[2], "w", encoding="utf-8") as output_file:
     output_file.flush()
     output_file.write(output_section_bss)
+    output_file.write(output_section_data)
     output_file.write(output_section_text)

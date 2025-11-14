@@ -1,3 +1,14 @@
 let x = 3;
 
-return x * 3 + 3;
+x = x * 3 + 3;
+
+let v = 2;
+
+asm {
+    xor eax, eax
+    mov eax, [x]
+    add eax, 4
+    mov [x], eax
+}
+
+exit x + v;

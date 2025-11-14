@@ -1,0 +1,27 @@
+{
+    "name": "meowlanggrammar",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.22.0"
+    },
+    "contributes": {
+        "languages": [
+            {
+                "id": "meowLang",
+                "aliases": [
+                    "MeowLang"
+                ],
+                "extensions": [
+                    ".meow"
+                ]
+            }
+        ],
+        "grammars": [
+            {
+                "language": "meowLang",
+                "scopeName": "source.meowLang",
+                "path": "./syntaxes/meowLang.tmLanguage.json"
+            }
+        ]
+    }
+}

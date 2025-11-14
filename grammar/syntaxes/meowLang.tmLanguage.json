@@ -1,0 +1,39 @@
+{
+    "name": "meowLang",
+    "scopeName": "source.meowLang",
+    "patterns": [
+        { "include": "#keywords" },
+        { "include": "#numbers" }
+    ],
+    "repository": {
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.var.meowLang",
+                    "match": "\\b(let)\\b"
+                },
+                {
+                    "name": "keyword.asm.meowLang",
+                    "match": "\\b(asm)\\b"
+                },
+                {
+                    "name": "keyword.exit.meowLang",
+                    "match": "\\b(exit)\\b"
+                },
+                {
+                    "name": "keyword.func.meowLang",
+                    "match": "\\b(func)\\b"
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.meowLang",
+                    "match": "[0-9]+"
+                }
+
+            ]
+        }
+    }
+}
