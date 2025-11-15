@@ -41,7 +41,7 @@ while i < len(input_content):
         while i < len(input_content) and input_content[i].isdigit():
             buf += input_content[i]
             i += 1
-    elif not c in '\r \t\n':
+    elif not c in '\r \t':
         buf = input_content[i]
         i += 1
     else:
@@ -90,6 +90,10 @@ class Exit(TNode):
     def __init__(self, value):
         self.value = value
 
+class Return(TNode):
+    def __init__(self, value):
+        self.value = value
+
 class Scope(TNode):
     def __init__(self, body : list):
         self.body = body
@@ -131,6 +135,8 @@ def parse_operation(inp):
                 
             elif inp[0][0].isdigit():
                 return Constant("int", inp[0])
+            else:
+                print ("error!")
         for o in ops:
             if o in inp:
                 ol = inp.index(o)
@@ -165,7 +171,7 @@ def parse_chunks(chunks):
                     i += 1
                 tr[-1].right = parse_operation(statement)
             else:
-                i += 3
+                i += 2
         if current_scope is not None and c == "let":
             ident = IdentDef(chunks[i + 1])
             ident.static = False
@@ -173,8 +179,8 @@ def parse_chunks(chunks):
             stackvar_offset += 4
             current_scope.variable_identifier_offsets.append(ident.offset)
             current_scope.variable_identifiers.append(ident.name)
+            tr.append(Assignment(Identifier(chunks[i+1]), None))
             if chunks[i + 2] == "=":
-                tr.append(Assignment(Identifier(chunks[i+1]), None))
                 i += 3
                 statement = []
                 while i < len(chunks) and chunks[i] not in ";\n":
@@ -191,6 +197,14 @@ def parse_chunks(chunks):
                 i += 1
             tr.append(Exit(parse_operation(statement)))
             i += 1
+        elif c == "return":
+            i += 1
+            statement = []
+            while i < len(chunks) and chunks[i] not in ";\n":
+                statement.append(chunks[i])
+                i += 1
+            tr.append(Return(parse_operation(statement)))
+            i += 1
         elif c == "asm":
             i += 2
             block = "\n"
@@ -206,6 +220,7 @@ def parse_chunks(chunks):
             i += 1
             name = chunks[i]
             function_identifiers.append(name)
+            print("Added function identifier called " + name)
             i += 2
             params = []
             while chunks[i] != ")":
@@ -246,7 +261,7 @@ def parse_chunks(chunks):
             idnt = Identifier(c)
             print("made an identifier instance")
             if chunks[i + 1] == "=":
-                print("parsing a nonstatic assignment now")
+                print("parsing a static assignment now")
                 tr.append(Assignment(idnt, None))
                 i += 2
                 statement = []
@@ -254,11 +269,14 @@ def parse_chunks(chunks):
                     statement.append(chunks[i])
                     i += 1
                 tr[-1].right = parse_operation(statement)
-                i += 1
+                objprint.op(tr[-1])
+                print(chunks[i])
+
             else:
                 print("static why is it not an assignment?")
                 i += 1
         elif c in function_identifiers:
+            print("found a call")
             ident = Identifier(c)
             params = []
             i += 2
@@ -397,7 +415,7 @@ def generate_statement(ident : TNode, scope : Scope) -> str:
         return asm
     else:
         print("no identifier type check for")
-        objprint.op(ident)
+        # objprint.op(ident)
         return ""
 
 objprint.op(TREE)
@@ -414,11 +432,12 @@ def parse_scope(scope) -> str:
             output += generate_statement(node, scope)
 
         elif isinstance(node, Exit):
-            if node.value in static_variable_identifiers:
-                output += generate_statement(node.value, scope) + "\n" # must change to actually dereference for stack vars too
-            else:
-                pass
+            output += generate_statement(node.value, scope) # must change to actually dereference for stack vars too
+            output += "push eax\n"
             output += "call _ExitProcess@4\n"
+        elif isinstance(node, Return):
+            output += generate_statement(node.value, scope) # must change to actually dereference for stack vars too
+            output += "ret\n"
 
         elif isinstance(node, AssemblyBlock):
             output += node.content

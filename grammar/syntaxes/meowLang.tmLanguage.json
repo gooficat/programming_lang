@@ -22,6 +22,10 @@
                     "match": "\\b(exit)\\b"
                 },
                 {
+                    "name": "keyword.other.return.meowLang",
+                    "match": "\\b(return)\\b"
+                },
+                {
                     "name": "keyword.operator.add.meowLang",
                     "match": "\\+"
                 },
