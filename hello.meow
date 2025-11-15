@@ -1,16 +1,8 @@
-static j;
-
-func double() {
-    j = 2
-    j = j ^ 2
-    return 0
-}
-
 func start() {
-    let i = 4
-    i = 1
+    let i = 4;
+    static j = 2;
 
-    double()
+    i = i + j;
 
-    exit j
+    exit i;
 }
