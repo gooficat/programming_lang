@@ -10,8 +10,12 @@
         "keywords": {
             "patterns": [
                 {
-                    "name": "keyword.var.meowLang",
+                    "name": "keyword.var.scoped.meowLang",
                     "match": "\\b(let)\\b"
+                },
+                {
+                    "name": "keyword.var.global.meowLang",
+                    "match": "\\b(static)\\b"
                 },
                 {
                     "name": "keyword.other.exit.meowLang",

@@ -42,12 +42,8 @@ while i < len(input_content):
             buf += input_content[i]
             i += 1
     elif not c in '\r \t\n':
-        if input_content[i:i+2] in ops:
-            buf = input_content[i:i+2]
-            i += 2
-        else:
-            buf = input_content[i]
-            i += 1
+        buf = input_content[i]
+        i += 1
     else:
         i += 1
         continue
@@ -72,11 +68,17 @@ function_identifiers = []
 class Identifier(TNode):
     def __init__(self, name):
         self.name = name
+        self.static = True
+        self.offset = 0
 
 class Assignment(TNode):
     def __init__(self, left, right):
         self.left = left
         self.right = right
+
+class IdentDef(TNode):
+    def __init__(self, name : str):
+        self.name : str = name
 
 class Operation(TNode):
     def __init__(self, operator, left, right):
@@ -91,6 +93,7 @@ class Exit(TNode):
 class Scope(TNode):
     def __init__(self, body : list):
         self.body = body
+        self.variable_identifiers : list = []
 
 class FuncDef(Scope):
     def __init__(self, name : str, params : list, body : list):
@@ -131,14 +134,20 @@ def parse_operation(inp):
         print("tried to parse an operation that is a tree node??? that's not good...")
 
 
+current_scope = None
+
+stackvar_offset = 0
 
 def parse_chunks(chunks):
     tr = []
     i = 0
+    global stackvar_offset
+    global current_scope
     while i < len(chunks):
         c = chunks[i]
-        if c == "let":
+        if c == "static":
             ident = Identifier(chunks[i + 1])
+            ident.static = True
             static_variable_identifiers.append(ident.name)
             if chunks[i + 2] == "=":
                 tr.append(Assignment(ident, None))
@@ -148,7 +157,22 @@ def parse_chunks(chunks):
                     statement.append(chunks[i])
                     i += 1
                 tr[-1].right = parse_operation(statement)
-                i += 1
+            else:
+                i += 3
+        if current_scope is not None and c == "let":
+            ident = Identifier(chunks[i + 1])
+            ident.static = False
+            ident.offset = stackvar_offset
+            stackvar_offset += 4
+            current_scope.variable_identifiers.append(ident.name)
+            if chunks[i + 2] == "=":
+                tr.append(Assignment(ident, None))
+                i += 3
+                statement = []
+                while i < len(chunks) and chunks[i] not in ";\n":
+                    statement.append(chunks[i])
+                    i += 1
+                tr[-1].right = parse_operation(statement)
             else:
                 i += 3
         elif c == "exit":
@@ -184,13 +208,28 @@ def parse_chunks(chunks):
             while chunks[i] != "}":
                 body.append(chunks[i])
                 i += 1
-            tr.append(
-                FuncDef(
+            func = FuncDef(
                     name,
                     params,
-                    parse_chunks(body)
+                    []
                 )
+            current_scope = func
+            func.body = parse_chunks(body)
+            tr.append(
+                func
             )
+        elif current_scope is not None and c in current_scope.variable_identifiers:
+            ident = Identifier(c)
+            if chunks[i + 1] == "=":
+                tr.append(Assignment(ident, None))
+                i += 2
+                statement = []
+                while i < len(chunks) and chunks[i] not in ";\n":
+                    statement.append(chunks[i])
+                    i += 1
+                tr[-1].right = parse_operation(statement)
+                i += 1
+        
         elif c in static_variable_identifiers:
             ident = Identifier(c)
             if chunks[i + 1] == "=":
@@ -217,7 +256,10 @@ def parse_chunks(chunks):
 
 
 TREE = Scope(parse_chunks(chunks))
+print(chunks)
 
+output_header = """extern _ExitProcess@4
+"""
 
 output_section_bss = """section .bss
 """
@@ -256,39 +298,91 @@ imul {r2}, edx
 sub ecx, 1
 cmp ecx, 1
 jne label_{internal_labels}
-mov eax, ebx"""
+mov {r1}, {r2}"""
             internal_labels += 1
     return out
 
-regs = { # whether it is reserved or not
-    "eax": False,
-    "ebx": False,
-    "ecx": False,
-    "edx": False
-}
+regs = [ # whether it is reserved or not
+    "eax",
+    "ebx",
+    "ecx",
+    "edx",
+    "esi",
+    "edi"
+]
 
-def generate_statement(ident : TNode, rec_depth = 0) -> str:
+regact = [
+    False,
+    False,
+    False,
+    False,
+    False,
+    False
+]
+
+
+def fal_reg(reg):
+    global regs
+    global regact
+    regact[regs.index(reg)] = False
+def tru_reg(reg):
+    global regs
+    global regact
+    regact[regs.index(reg)] = True
+
+def reset_regs():
+    global regs
+    for r in regs:
+        fal_reg(r)
+
+
+rec_depth = 0
+current_off = 0
+def generate_statement(ident : TNode, scope : Scope) -> str:
+    global rec_depth
+    global regs
+    global regact
+    rec_depth += 1
+    global current_off
+
+    r1 = ""
+    r2 = ""
+    for r in range(len(regs)):
+        if regact[r]:
+            r1 = regs[r]
+
     if isinstance(ident, Constant):
         return "mov eax, " + str(ident.value) + " \n"
     
     elif isinstance(ident, Identifier):
-        return "mov eax, [" + ident.name + "]\n"
-    
+        if ident.static:
+            return "mov eax, [" + ident.name + "]\n"
+        else:
+            return f"mov eax, [{ident.offset} + {current_off} + ]\n"
     elif isinstance(ident, Operation):
-        asm = generate_statement(ident.left, rec_depth+1)
+        asm = generate_statement(ident.left, scope)
         asm += "push eax\n"
-        asm += generate_statement(ident.right, rec_depth+1)
+        current_off += 4
+        asm += generate_statement(ident.right, scope)
         asm += "pop ebx\n"
+        current_off -= 4
         asm += generate_operation(ident) + "\n"
         return asm
     elif isinstance(ident, Assignment):
-        asm = generate_statement(ident.right)
-        asm += "mov [" + ident.left.name + "], eax\n"
+        if ident.left.name in scope.variable_identifiers:
+            asm = generate_statement(ident.right, scope)
+            asm += f"sub esp, 4\n"
+            asm += f"mov [esp], eax\n" # make a nonstatic variable
+        else:
+            asm = generate_statement(ident.right, scope)
+            asm += f"mov [" + ident.left.name + "], eax\n"
         return asm
     else:
+        print("no identifier type check for")
+        objprint.op(ident)
         return ""
 
-# objprint.op(TREE)
+objprint.op(TREE)
 
 def parse_scope(scope) -> str:
     output = ""
@@ -297,11 +391,13 @@ def parse_scope(scope) -> str:
     global output_section_bss
     for node in nodes:
         if isinstance(node, Assignment) or isinstance(node, Operation):
-            output += generate_statement(node)
+            rec_depth = 0
+            reset_regs()
+            output += generate_statement(node, scope)
 
         elif isinstance(node, Exit):
-            output += generate_statement(node.value)
-            output += "ret\n"
+            output += generate_statement(node.value, scope) + "\n"
+            output += "call _ExitProcess@4\n"
 
         elif isinstance(node, AssemblyBlock):
             output += node.content
@@ -322,6 +418,7 @@ output_section_text += parse_scope(TREE)
 
 with open(sys.argv[2], "w", encoding="utf-8") as output_file:
     output_file.flush()
+    output_file.write(output_header)
     output_file.write(output_section_bss)
     output_file.write(output_section_data)
     output_file.write(output_section_text)

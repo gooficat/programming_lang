@@ -1,11 +1,6 @@
-let x;
-
-
-
 func start() {
-    x = 2 ^ 3;
+    let i = 0;
+    static j = 0;
 
-    go();
-
-    exit x;
+    exit 0;
 }
