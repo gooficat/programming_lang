@@ -68,8 +68,6 @@ function_identifiers = []
 class Identifier(TNode):
     def __init__(self, name):
         self.name = name
-        self.static = True
-        self.offset = 0
 
 class Assignment(TNode):
     def __init__(self, left, right):
@@ -79,6 +77,8 @@ class Assignment(TNode):
 class IdentDef(TNode):
     def __init__(self, name : str):
         self.name : str = name
+        self.static = True
+        self.offset = 0
 
 class Operation(TNode):
     def __init__(self, operator, left, right):
@@ -94,6 +94,9 @@ class Scope(TNode):
     def __init__(self, body : list):
         self.body = body
         self.variable_identifiers : list = []
+        self.variable_identifier_offsets : list = []
+    def __eq__(self, other):
+        return True
 
 class FuncDef(Scope):
     def __init__(self, name : str, params : list, body : list):
@@ -115,11 +118,17 @@ class NewLine(TNode):
     def __init__(self):
         super().__init__()
 
+rec_depth = 0
+current_off = 0
+
 def parse_operation(inp):
+    global current_off
+    global current_scope
     if not isinstance(inp, TNode):
         if len(inp) == 1:
             if inp[0][0].isalpha():
                 return Identifier(inp[0])
+                
             elif inp[0][0].isdigit():
                 return Constant("int", inp[0])
         for o in ops:
@@ -146,11 +155,9 @@ def parse_chunks(chunks):
     while i < len(chunks):
         c = chunks[i]
         if c == "static":
-            ident = Identifier(chunks[i + 1])
-            ident.static = True
-            static_variable_identifiers.append(ident.name)
+            static_variable_identifiers.append(chunks[i+1])
             if chunks[i + 2] == "=":
-                tr.append(Assignment(ident, None))
+                tr.append(Assignment(Identifier(chunks[i+1]), None))
                 i += 3
                 statement = []
                 while i < len(chunks) and chunks[i] not in ";\n":
@@ -160,13 +167,14 @@ def parse_chunks(chunks):
             else:
                 i += 3
         if current_scope is not None and c == "let":
-            ident = Identifier(chunks[i + 1])
+            ident = IdentDef(chunks[i + 1])
             ident.static = False
             ident.offset = stackvar_offset
             stackvar_offset += 4
+            current_scope.variable_identifier_offsets.append(ident.offset)
             current_scope.variable_identifiers.append(ident.name)
             if chunks[i + 2] == "=":
-                tr.append(Assignment(ident, None))
+                tr.append(Assignment(Identifier(chunks[i+1]), None))
                 i += 3
                 statement = []
                 while i < len(chunks) and chunks[i] not in ";\n":
@@ -219,9 +227,9 @@ def parse_chunks(chunks):
                 func
             )
         elif current_scope is not None and c in current_scope.variable_identifiers:
-            ident = Identifier(c)
+            idnt = Identifier(c)
             if chunks[i + 1] == "=":
-                tr.append(Assignment(ident, None))
+                tr.append(Assignment(idnt, None))
                 i += 2
                 statement = []
                 while i < len(chunks) and chunks[i] not in ";\n":
@@ -229,17 +237,26 @@ def parse_chunks(chunks):
                     i += 1
                 tr[-1].right = parse_operation(statement)
                 i += 1
+            else:
+                print("why is it not an assignment?")
+                i += 1
         
         elif c in static_variable_identifiers:
-            ident = Identifier(c)
+            print("found a static var")
+            idnt = Identifier(c)
+            print("made an identifier instance")
             if chunks[i + 1] == "=":
-                tr.append(Assignment(ident, None))
+                print("parsing a nonstatic assignment now")
+                tr.append(Assignment(idnt, None))
                 i += 2
                 statement = []
                 while i < len(chunks) and chunks[i] not in ";\n":
                     statement.append(chunks[i])
                     i += 1
                 tr[-1].right = parse_operation(statement)
+                i += 1
+            else:
+                print("static why is it not an assignment?")
                 i += 1
         elif c in function_identifiers:
             ident = Identifier(c)
@@ -336,8 +353,6 @@ def reset_regs():
         fal_reg(r)
 
 
-rec_depth = 0
-current_off = 0
 def generate_statement(ident : TNode, scope : Scope) -> str:
     global rec_depth
     global regs
@@ -355,10 +370,13 @@ def generate_statement(ident : TNode, scope : Scope) -> str:
         return "mov eax, " + str(ident.value) + " \n"
     
     elif isinstance(ident, Identifier):
-        if ident.static:
+        if ident.name in static_variable_identifiers:
             return "mov eax, [" + ident.name + "]\n"
+        elif current_scope is not None:
+            return f"mov eax, [esp + {current_scope.variable_identifier_offsets[current_scope.variable_identifiers.index(ident.name)]} + {current_off}]\n"
         else:
-            return f"mov eax, [{ident.offset} + {current_off} + ]\n"
+            print("ERERRRRRORRRRRRRRRR")
+            return ""
     elif isinstance(ident, Operation):
         asm = generate_statement(ident.left, scope)
         asm += "push eax\n"
@@ -396,7 +414,10 @@ def parse_scope(scope) -> str:
             output += generate_statement(node, scope)
 
         elif isinstance(node, Exit):
-            output += generate_statement(node.value, scope) + "\n"
+            if node.value in static_variable_identifiers:
+                output += generate_statement(node.value, scope) + "\n" # must change to actually dereference for stack vars too
+            else:
+                pass
             output += "call _ExitProcess@4\n"
 
         elif isinstance(node, AssemblyBlock):

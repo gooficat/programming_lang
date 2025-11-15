@@ -1,6 +1,8 @@
 func start() {
-    let i = 0;
-    static j = 0;
+    let i = 4;
+    static j = 2;
 
-    exit 0;
+    i = i + j;
+
+    exit i;
 }
