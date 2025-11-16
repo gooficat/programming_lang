@@ -1,0 +1,4 @@
+
+func start() {
+    call exit(257);
+}

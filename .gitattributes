@@ -1,0 +1,49 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Custom for Visual Studio
+*.cs     diff=csharp
+
+# Standard to msysgit
+*.doc    diff=astextplain
+*.DOC    diff=astextplain
+*.docx   diff=astextplain
+*.DOCX   diff=astextplain
+*.dot    diff=astextplain
+*.DOT    diff=astextplain
+*.pdf    diff=astextplain
+*.PDF    diff=astextplain
+*.rtf    diff=astextplain
+*.RTF    diff=astextplain
+
+# C/C++ files
+*.c      text diff=c   eol=crlf
+*.cc     text diff=cpp eol=crlf
+*.cxx    text diff=cpp eol=crlf
+*.cpp    text diff=cpp eol=crlf
+*.c++    text diff=cpp eol=crlf
+*.hpp    text diff=cpp eol=crlf
+*.h      text diff=c   eol=crlf
+*.h++    text diff=cpp eol=crlf
+*.hh     text diff=cpp eol=crlf
+
+# Archives
+*.7z     binary
+*.gz     binary
+*.tar    binary
+*.tgz    binary
+*.zip    binary
+
+# Text files should always have LF endings
+*.txt    text eol=crlf
+*.md     text eol=crlf
+*.yml    text eol=crlf
+*.yaml   text eol=crlf
+*.json   text eol=crlf
+
+# Shell scripts should always have LF endings
+*.sh     text eol=lf
+
+# Windows batch files should have CRLF endings
+*.bat    text eol=crlf
+*.cmd    text eol=crlf

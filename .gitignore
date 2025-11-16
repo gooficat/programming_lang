@@ -1,0 +1,93 @@
+# Build directories
+build/
+out/
+.vs/
+.vscode/settings.json
+
+# Compiled Object files
+*.obj
+*.slo
+*.lo
+*.o
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.dll
+*.so
+*.dylib
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lib
+*.lai
+*.la
+*.a
+
+# Executables
+*.exe
+*.out
+*.app
+*.bin
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# vcpkg
+vcpkg_installed/
+.vcpkg-root
+
+# IDE specific files
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# Logs
+*.log
+
+# Visual Studio
+*.VC.db
+*.VC.opendb
+*.vcxproj.user
+*.vspx
+*.sap
+*.pidb
+*.userprefs
+*.usertasks
+*.aps
+*.pch
+*.vspscc
+*.vssscc
+*_i.c
+*_p.c
+*.ncb
+*.tlb
+*.tlh
+*.bak
+*.cache
+*.ilk
+*.metaproj
+*.meta
+*.binlog
