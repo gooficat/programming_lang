@@ -3,6 +3,11 @@ section .data
 section .text
 extern ExitProcess
 global start
+escape:
+mov rcx , [ rsp + 8 ] 
+call ExitProcess 
+
 start:
-mov rcx, 257
-call ExitProcess
+push 2
+call escape
+

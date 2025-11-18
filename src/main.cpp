@@ -46,6 +46,13 @@ enum NodeType {
     ASSEMBLY
 };
 
+vector<char> Operators {
+    '+',
+    '-',
+    '*',
+    '/'
+};
+
 map<string, string> MACROS = {
     {"exit", "ExitProcess"}
 };
@@ -88,7 +95,9 @@ struct Operation : Node {
     Operation() {
         what_type = OPERATION;
     }
-    vector<unique_ptr<Node>> Nodes;
+    Node * left;
+    Node * right;
+    char operator_symbol;
 };
 
 struct Assignment : Node {
@@ -96,7 +105,7 @@ struct Assignment : Node {
         what_type = ASSIGNMENT;
     }
     shared_ptr<VarDef> to_what;
-    Operation value;
+    shared_ptr<Operation> value;
 };
 
 struct Function : Named {
@@ -183,9 +192,35 @@ Node * parse_expression(const vector<string>& chunks, Scope* scope) {
         }
     }
     else {
-        cerr << "Length of expression greater than 1! Not yet supported" << endl;
-        exit(EXIT_FAILURE);
+        for (auto& op : Operators) {
+            for (size_t i = 0; i < chunks.size(); i++) {
+                auto& c = chunks.at(i);
+                if (c.at(0) == op) {
+                    vector<string> left, right;
+                    for (auto& chunk : chunks) {
+                        if (chunk == c) {
+                            break;
+                        }
+                        left.push_back(chunk);
+                    }
+                    for (size_t j = i+1; j < chunks.size(); j++) {
+                        auto& chunk = chunks.at(j);
+                        right.push_back(chunk);
+                    }
+
+                    Operation * oper = new Operation();
+                    oper->operator_symbol = op;
+                    oper->left = parse_expression(left, scope);
+                    oper->right = parse_expression(right, scope);
+
+                    return oper;
+                }
+            }
+        }
     }
+    
+        cerr << "Expression does not fit any defined type." << endl;
+        exit(EXIT_FAILURE);
 }
 
 
@@ -202,19 +237,38 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_topscope = false) {
     }
 
     while (i < chunks.size()) {
-        if (not chunks.at(i).compare("func")) {
+        if (not chunks.at(i).compare("let")) {
+            auto def = new VarDef();
+            def->name = chunks.at(++i);
+            scope->identifiers.push_back(shared_ptr<VarDef>(def));
+            if (chunks.at(++i).compare(";")) {
+                auto ass = new Assignment();
+                ass->to_what = shared_ptr<VarDef>(scope->identifiers.at(scope->identifiers.size() -1));
+
+                vector<string> expr_chunks;
+
+                while (chunks.at(i).compare(";")) {
+                    expr_chunks.push_back(chunks.at(i++));
+                }
+
+                ass->value = static_pointer_cast<Operation>(shared_ptr<Node>(parse_expression(expr_chunks, scope)));
+
+                scope->nodes.push_back(shared_ptr<Assignment>(ass));
+            }
+        }
+        else if (not chunks.at(i).compare("func")) {
             cout << "Found a function" << endl;
             auto func = new Function();
             ++i;
             func->name = chunks.at(i);
             cout << "function name " << func->name << endl;
-            ++(++i);
+            i += 2;
             // while (chunks.at(i) != "begin") {
             //     i++; // skip over params
             // }
             cout << chunks.at(i) << endl;
             vector<string> body;
-            ++(++i);
+            i += 2;
 
 
             cout << chunks.at(i) << endl;
@@ -248,7 +302,11 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_topscope = false) {
             ++(++i);
             vector<shared_ptr<Node>> arglist = {};
             while (chunks.at(i).compare(")")) {
-                arglist.push_back(unique_ptr<Node>(parse_expression({chunks.at(i++)}, scope))); // later, make it split by comma
+                vector<string> exp;
+                while (chunks.at(i).compare(",") and chunks.at(i).compare(")")) {
+                    exp.push_back(chunks.at(i++));
+                }
+                arglist.push_back(unique_ptr<Node>(parse_expression(exp, scope))); // making it split by comma now // later, make it split by comma
             }
             ++i;
             call->args = arglist;
@@ -292,8 +350,19 @@ string generate_single(const shared_ptr<Node>& node, const string& prefix) {
 
     if (node->what_type == CONSTANT) {
         auto c = static_pointer_cast<Constant>(node);
-
-        output += prefix + c->value;
+        string type;
+        switch (c->length) {
+            case 1:
+                type = "byte";
+                break;
+            case 2:
+                type = "word";
+                break;
+            case 4:
+                type = "dword";
+                break;
+        }
+        output += prefix + " " + c->value;
     }
     else {
         cerr << "Cannot currently pass non-constant to a function" << endl;
@@ -312,7 +381,6 @@ string generate_assembly(Scope* scope) {
 extern ExitProcess
 global start
 )";
-
 
     auto i = 0ULL;
 
@@ -338,7 +406,7 @@ global start
 
                 for (auto& arg : c->args) {
                     section_text.append(
-                        generate_single(arg, "push ") + "\n"
+                        generate_single(arg, "push") + "\n"
                     );
                 }
 
@@ -352,7 +420,7 @@ global start
                 {
                     auto a = node_as(AssemblyBlock);
 
-                    section_text.append("\n;user generated assembly starts here\n" + a->content + "\n;user generated assembly ends here\n");
+                    section_text.append(a->content + "\n");
                 }
                 break;
             default:
