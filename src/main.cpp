@@ -377,9 +377,14 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_top_scope = false) {
             
             ++i;
 
-            if (chunks.at(i) == "{") {
-                while (chunks.at(i).compare("}")) {
-                    block->content.append(chunks.at(i) + " ");
+            if (chunks.at(i) == "(") {
+                i++;
+                while (chunks.at(i).compare(")")) {
+                    while (chunks.at(i).compare(";")) {
+                        block->content.append(chunks.at(i) + " ");
+                        i++;
+                    }
+                    block->content.append("\n");
                     i++;
                 }
             }
@@ -520,6 +525,12 @@ global start
                     "call " + c->of_what->name +
                     "\n"
                 );
+
+                for (auto& arg : c->args) {
+                    section_text.append(
+                        "pop r15\n"
+                    );
+                }
             }
                 break;
             case ASSEMBLY:

@@ -1,10 +1,13 @@
-
+asm extern MessageBoxA;
 func escape() {
-    asm mov rcx, [rsp+8];
-    asm call ExitProcess;
+    asm (
+        mov rcx, [rsp+8];
+        call ExitProcess;
+    );
 }
 
 func start() {
     static i 2;
     call escape(i, 8);
+
 }
