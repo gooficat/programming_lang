@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -8,6 +9,7 @@
 #include <sstream>
 #include <vector>
 #include <map>
+#include <cstring>
 
 using namespace std;
 
@@ -43,7 +45,11 @@ enum NodeType {
     SCOPE,
     COMPARISON,
     CONDITIONAL,
-    ASSEMBLY
+    ASSEMBLY,
+
+
+
+    REGISTER
 };
 
 vector<char> Operators {
@@ -73,15 +79,20 @@ struct Constant : Node {
         what_type = CONSTANT;
     }
     // enum ConstantType {} type; // add later
-    uint8_t length;
+    string length;
     string value;
 };
 
 struct Named : Node {
     string name;
 };
+
 struct VarDef : Named {
-    
+    VarDef() {
+        what_type = VARDEF;
+    }
+    string length;
+    bool is_static;
 };
 
 struct VarRef : Node {
@@ -95,8 +106,8 @@ struct Operation : Node {
     Operation() {
         what_type = OPERATION;
     }
-    Node * left;
-    Node * right;
+    shared_ptr<Node> left;
+    shared_ptr<Node> right;
     char operator_symbol;
 };
 
@@ -104,7 +115,7 @@ struct Assignment : Node {
     Assignment() {
         what_type = ASSIGNMENT;
     }
-    shared_ptr<VarDef> to_what;
+    shared_ptr<VarRef> to_what;
     shared_ptr<Operation> value;
 };
 
@@ -124,6 +135,7 @@ struct Scope : Node {
     vector<shared_ptr<VarDef>> identifiers;
     vector<shared_ptr<Function>> function_identifiers;
     // add some storage of all of its definitions perhaps
+    inline static Scope *top_scope;
 };
 
 
@@ -162,6 +174,17 @@ auto find_var_in_scope(string val, Scope *scope) -> shared_ptr<Node> {
             return var;
         }
     }
+
+    for (auto& var : Scope::top_scope->identifiers) {
+        if (var->name == val) {
+            return var;
+        }
+    }
+    for (auto& var : Scope::top_scope->function_identifiers) {
+        if (var->name == val) {
+            return var;
+        }
+    }
     
     cerr << "Could not find var in scope!" << endl;
     exit(EXIT_FAILURE);
@@ -186,7 +209,7 @@ Node * parse_expression(const vector<string>& chunks, Scope* scope) {
         else {
             cout << chunks.at(0) << " is beginning with an digit!" << endl;
             auto n = new Constant();
-            n->length = 4;
+            n->length = "8";
             n->value = chunks.at(0);
             return n;
         }
@@ -210,8 +233,8 @@ Node * parse_expression(const vector<string>& chunks, Scope* scope) {
 
                     Operation * oper = new Operation();
                     oper->operator_symbol = op;
-                    oper->left = parse_expression(left, scope);
-                    oper->right = parse_expression(right, scope);
+                    oper->left = shared_ptr<Node>(parse_expression(left, scope));
+                    oper->right = shared_ptr<Node>(parse_expression(right, scope));
 
                     return oper;
                 }
@@ -219,37 +242,69 @@ Node * parse_expression(const vector<string>& chunks, Scope* scope) {
         }
     }
     
-        cerr << "Expression does not fit any defined type." << endl;
+        cerr << "Expression does not fit any defined type. Chunk at beginning is " << chunks.at(0) << endl;
         exit(EXIT_FAILURE);
 }
 
 
-Scope *parse_chunks(const vector<string>& chunks, bool is_topscope = false) {
+Scope *parse_chunks(const vector<string>& chunks, bool is_top_scope = false) {
     auto i = 0ULL;
 
     Scope *scope = new Scope();
-    static Scope *topscope = scope;
-    if (is_topscope) {
+    if (is_top_scope) {
+        Scope::top_scope = scope;
         scope->function_identifiers.emplace_back(
             new Function()
         );
         scope->function_identifiers.at(0)->name = "ExitProcess";
+        // scope->function_identifiers.at(0)->args = 
     }
 
     while (i < chunks.size()) {
         if (not chunks.at(i).compare("let")) {
             auto def = new VarDef();
+            def->length = "8"; // FIXED FOR NOW CHANGE LATER
+            def->is_static = false;
             def->name = chunks.at(++i);
             scope->identifiers.push_back(shared_ptr<VarDef>(def));
+            scope->nodes.push_back(shared_ptr<VarDef>(def));
             if (chunks.at(++i).compare(";")) {
+                cout << "Assignment to " << def->name << endl;
                 auto ass = new Assignment();
-                ass->to_what = shared_ptr<VarDef>(scope->identifiers.at(scope->identifiers.size() -1));
+                ass->to_what = make_shared<VarRef>();
+                ass->to_what->to_what = shared_ptr<VarDef>(scope->identifiers.at(scope->identifiers.size() -1));
 
                 vector<string> expr_chunks;
 
                 while (chunks.at(i).compare(";")) {
                     expr_chunks.push_back(chunks.at(i++));
                 }
+
+                ass->value = static_pointer_cast<Operation>(shared_ptr<Node>(parse_expression(expr_chunks, scope)));
+
+                scope->nodes.push_back(shared_ptr<Assignment>(ass));
+            }
+        }
+        else if (not chunks.at(i).compare("static")) {
+            auto def = new VarDef();
+            def->length = "8"; // CHANGE LATER TO NON FIXED
+            def->is_static = true;
+            def->name = chunks.at(++i);
+            Scope::top_scope->identifiers.push_back(shared_ptr<VarDef>(def));
+            scope->nodes.push_back(shared_ptr<VarDef>(def));
+            if (chunks.at(++i).compare(";")) {
+                cout << "Assignment to " << def->name << endl;
+                auto ass = new Assignment();
+                ass->to_what = make_shared<VarRef>();
+                ass->to_what->to_what = shared_ptr<VarDef>(Scope::top_scope->identifiers.at(Scope::top_scope->identifiers.size() -1));
+
+
+                vector<string> expr_chunks;
+
+                while (chunks.at(i).compare(";")) {
+                    expr_chunks.push_back(chunks.at(i++));
+                }
+                for (auto& ch : expr_chunks) cout << "chunk of expr" << ch << endl;
 
                 ass->value = static_pointer_cast<Operation>(shared_ptr<Node>(parse_expression(expr_chunks, scope)));
 
@@ -288,7 +343,7 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_topscope = false) {
             cout << "Found a function call of " << chunks.at(i+1) << endl;
             auto call = new Call();
             ++i;
-            for (auto& ident : topscope->function_identifiers) {
+            for (auto& ident : Scope::top_scope->function_identifiers) {
                 if (not ident->name.compare(chunks.at(i))) {
                     call->of_what = shared_ptr<Function>(ident);
                 }
@@ -298,7 +353,7 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_topscope = false) {
                     call->of_what = shared_ptr<Function>(ident);
                 }
             }
-            cout << "Argument for function CALL of name" << call->of_what->what_type << endl;
+            cout << "Argument for function CALL of type " << call->of_what->what_type << endl;
             ++(++i);
             vector<shared_ptr<Node>> arglist = {};
             while (chunks.at(i).compare(")")) {
@@ -307,11 +362,11 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_topscope = false) {
                     exp.push_back(chunks.at(i++));
                 }
                 arglist.push_back(unique_ptr<Node>(parse_expression(exp, scope))); // making it split by comma now // later, make it split by comma
+                if (chunks.at(i) == ",") ++i;
             }
             ++i;
             call->args = arglist;
             cout << arglist.size() << " is the length of arglist" << endl;
-            if (arglist.size() > 0) cout << arglist.at(0) << " " << call->args.at(0) << endl;
             
             scope->nodes.push_back(shared_ptr<Call>(call));
         }
@@ -348,32 +403,83 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_topscope = false) {
 string generate_single(const shared_ptr<Node>& node, const string& prefix) {
     string output = "";
 
-    if (node->what_type == CONSTANT) {
-        auto c = static_pointer_cast<Constant>(node);
-        string type;
-        switch (c->length) {
-            case 1:
-                type = "byte";
-                break;
-            case 2:
-                type = "word";
-                break;
-            case 4:
-                type = "dword";
+    switch (node->what_type) {
+        case CONSTANT : {
+            auto c = static_pointer_cast<Constant>(node);
+            output += prefix + " " + c->value;
+            break;
+        }
+        case VARREF : {
+            auto v = static_pointer_cast<VarRef>(node);
+            if (v->to_what->is_static) {
+                output += prefix + " " + "[" + v->to_what->name + "]";
+            }
                 break;
         }
-        output += prefix + " " + c->value;
+        default :
+            cerr << "Cannot currently pass non-constant, non-variable to a function" << endl;
+            exit(EXIT_FAILURE);
+            break;
     }
-    else {
-        cerr << "Cannot currently pass non-constant to a function" << endl;
-        exit(EXIT_FAILURE);
-    }
-
     return output;
 }
 
+struct Register : Named {
+    Register() {
+        what_type = REGISTER;
+    }
+};
+
+string generate_operation(shared_ptr<Node> node, shared_ptr<Node> target) {
+    string result = "";
+
+    switch (node->what_type) {
+        case OPERATION: {
+            auto o = static_pointer_cast<Operation>(node);
+
+            auto l = o->left;
+            auto r = o->right;
+
+
+
+            string to = "";
+            switch (target->what_type) {
+                case REGISTER:{
+                        auto r = static_pointer_cast<Register>(node);
+
+                        to = r->name;
+                    }
+                    break;
+                case VARREF:{
+                        auto r = static_pointer_cast<VarRef>(node);
+
+                        to = r->to_what->is_static ? r->to_what->name : r->to_what->name; // URGENT REVISIT : make nonstatics work
+                    }
+                    break;
+                default:
+                    cerr << "Should not be attempting to assign to a non-register non-variable value!" << endl;
+                    break;
+            }
+            result = "mov " + to + ", " + "";
+
+        }
+            break;
+        case VARREF:
+        case CONSTANT:
+            result = generate_single(target, "mov ") + generate_single(node, ", ");
+            //cout << "single of val " << result << endl; // IMMEDIATE REVISIT 
+            break;
+        default:
+            cout << "Operation is failed! " << target->what_type << " " <<  node->what_type << endl;
+            break;
+    }
+
+    return result;
+}
+
 string generate_assembly(Scope* scope) {
-    static string section_bss = R"(section .bss
+    static string section_bss = R"(DEFAULT REL
+section .bss
 )";
     static string section_data = R"(section .data
 )";
@@ -386,10 +492,10 @@ global start
 
     while (i < scope->nodes.size()) {
         switch (scope->nodes.at(i)->what_type) {
-            #define node_as(what) static_pointer_cast<what>(scope->nodes.at(i++))
+            #define inc_cast(what) static_pointer_cast<what>(scope->nodes.at(i++))
             case FUNCDEF:
             {
-                auto f = node_as(Function);
+                auto f = inc_cast(Function);
                 cout << "Found a funcdef named " << f->name << endl;
 
                 section_text.append(
@@ -402,7 +508,7 @@ global start
                 break;
             case CALL:
             {
-                auto c = node_as(Call);
+                auto c = inc_cast(Call);
 
                 for (auto& arg : c->args) {
                     section_text.append(
@@ -418,9 +524,39 @@ global start
                 break;
             case ASSEMBLY:
                 {
-                    auto a = node_as(AssemblyBlock);
+                    auto a = inc_cast(AssemblyBlock);
 
                     section_text.append(a->content + "\n");
+                }
+                break;
+            case ASSIGNMENT:
+                {
+                    auto node = scope->nodes.at(i++);
+                    auto as_ass = static_pointer_cast<Assignment>(node);
+                    auto to_what = static_pointer_cast<Node>(as_ass->to_what);
+
+                    string oper = generate_operation(
+                            as_ass->value,
+                            to_what
+                        ) + "\n";
+
+                    cout << oper << endl;
+
+                    section_text.append(
+                        oper
+                    );
+
+                }
+                break;
+            case VARDEF:
+                {
+                    auto v = inc_cast(VarDef);
+                    if (v->is_static) {
+                        section_bss.append(v->name + " resb " + v->length + "\n");
+                    }
+                    else {
+                        cout << "nonstatic variables unimplemented!!!" << endl;
+                    }
                 }
                 break;
             default:
@@ -431,14 +567,17 @@ global start
     return section_bss + section_data + section_text;
 }
 
-auto main(int32_t argc, char *argv[]) -> int {
-    cout << "Hello from " << LANGUAGE_NAME << "!" << endl;
+int main(int32_t argc, char *argv[]) {
+    // cout << "Hello from " << LANGUAGE_NAME << "!" << endl;
 
-    assert(argc == 3 && "Incorrect arguments! Correct call is /path/to/compiler <input file> <output assembly file>");
+    // assert(argc == 3 && "Incorrect arguments! Correct call is /path/to/compiler <input file> <output assembly file>");
 
-    cout << argv[1] << endl;
+    string def_in = "..\\z_meow\\test.meow";
+    string def_out = "..\\z_meow\\test.asm";
 
-    ifstream input_file(argv[1]);
+    // cout << argv[1] << endl;
+
+    ifstream input_file(argc == 3 ? argv[1] : def_in);
     stringstream input_stream;
     input_stream << input_file.rdbuf();
     input_file.close();
@@ -458,11 +597,11 @@ auto main(int32_t argc, char *argv[]) -> int {
 
     cout << "\n" << assembly << endl;
 
-    std::ofstream out_file(argv[2]);
+    std::ofstream out_file(argc == 3 ? argv[2] : def_out);
     out_file << assembly;
     out_file.close();
 
-    return 2;
+    return 0;
 }
 
 vector<string> split(const string& input) {

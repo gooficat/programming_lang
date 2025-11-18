@@ -1,3 +1,8 @@
+# Custom
+z_meow/test.exe
+z_meow/test.obj
+z_meow/test.asm
+
 # Build directories
 build/
 out/

@@ -1,4 +1,6 @@
+DEFAULT REL
 section .bss
+i resb 8
 section .data
 section .text
 extern ExitProcess
@@ -8,6 +10,8 @@ mov rcx , [ rsp + 8 ]
 call ExitProcess 
 
 start:
-push 2
+mov  [i],  2
+push [i]
+push 8
 call escape
 

@@ -1,9 +1,10 @@
+
 func escape() {
     asm mov rcx, [rsp+8];
     asm call ExitProcess;
 }
 
 func start() {
-    let i;
-    call escape(2);
+    static i 2;
+    call escape(i, 8);
 }
