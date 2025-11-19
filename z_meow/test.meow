@@ -1,13 +1,29 @@
-asm extern MessageBoxA;
-func escape() {
+using GetModuleHandleA;
+using MessageBoxA;
+
+func hello() {
+    static msg:6;
     asm (
-        mov rcx, [rsp+8];
-        call ExitProcess;
+        mov byte [msg+0], 72;
+        mov byte [msg+1], 101;
+        mov byte [msg+2], 108;
+        mov byte [msg+3], 108;
+        mov byte [msg+4], 111;
+        mov byte [msg+5], 0;
+        
+        mov rcx, 0;
+        lea rdx, [msg];
+        lea r8, [msg];
+        mov r9, 0;
+
+        call MessageBoxA;
+        ret;
     );
 }
 
-func start() {
-    static i 2;
-    call escape(i, 8);
 
+func entry() {
+    call hello();
+    
+    exit 0;
 }

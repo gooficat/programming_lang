@@ -1,21 +1,34 @@
 DEFAULT REL
 section .bss
-i resb 8
+msg resb 6
 section .data
 section .text
 extern ExitProcess
 global start
-extern MessageBoxA 
-escape:
-mov rcx , [ rsp + 8 ] 
-call ExitProcess 
-
 
 start:
-mov  [i],  2
-push [i]
-push 8
-call escape
-pop r15
-pop r15
+    sub rsp, 40
+    call entry
+    add rsp, 40
+    call ExitProcess
+extern GetModuleHandleA
+extern MessageBoxA
+hello:
+mov byte [ msg + 0 ] , 72 
+mov byte [ msg + 1 ] , 101 
+mov byte [ msg + 2 ] , 108 
+mov byte [ msg + 3 ] , 108 
+mov byte [ msg + 4 ] , 111 
+mov byte [ msg + 5 ] , 0 
+mov rcx , 0 
+lea rdx , [ msg ] 
+lea r8 , [ msg ] 
+mov r9 , 0 
+call MessageBoxA 
+ret 
+
+
+entry:
+call hello
+mov rcx , 0 
 

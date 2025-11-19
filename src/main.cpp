@@ -47,7 +47,7 @@ enum NodeType {
     CONDITIONAL,
     ASSEMBLY,
 
-
+    EXTFUNC,
 
     REGISTER
 };
@@ -60,7 +60,7 @@ vector<char> Operators {
 };
 
 map<string, string> MACROS = {
-    {"exit", "ExitProcess"}
+    {"exit", "asm mov rcx,"}
 };
 
 struct Node {
@@ -78,7 +78,10 @@ struct Constant : Node {
     Constant() {
         what_type = CONSTANT;
     }
-    // enum ConstantType {} type; // add later
+    enum ConstantType {
+        INT,
+        STRING
+    } type; // add later
     string length;
     string value;
 };
@@ -125,6 +128,12 @@ struct Function : Named {
     }
     unique_ptr<struct Scope> body;
     vector<VarDef> args;
+};
+
+struct ExternFunction : Named {
+    ExternFunction() {
+        what_type = EXTFUNC;
+    }
 };
 
 struct Scope : Node {
@@ -206,15 +215,31 @@ Node * parse_expression(const vector<string>& chunks, Scope* scope) {
                 return n;
             }
         }
-        else {
+        else if (isdigit(chunks.at(0).at(0))) {
             cout << chunks.at(0) << " is beginning with an digit!" << endl;
             auto n = new Constant();
+            n->type = Constant::ConstantType::INT;
             n->length = "8";
             n->value = chunks.at(0);
             return n;
         }
+
     }
     else {
+        if (chunks.at(0).at(0) == '\"'){
+            cout << "String literal!" << endl;
+            string ctt = "";
+            for (size_t i = 1; i < chunks.size() - 1; i++) {   
+                ctt.append(
+                    chunks.at(i)
+                );
+            }
+            auto c = new Constant();
+            c->type = Constant::ConstantType::STRING;
+            c->length = ctt.length();
+            c->value = chunks.at(1);
+            return c;
+        }
         for (auto& op : Operators) {
             for (size_t i = 0; i < chunks.size(); i++) {
                 auto& c = chunks.at(i);
@@ -253,10 +278,10 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_top_scope = false) {
     Scope *scope = new Scope();
     if (is_top_scope) {
         Scope::top_scope = scope;
-        scope->function_identifiers.emplace_back(
-            new Function()
-        );
-        scope->function_identifiers.at(0)->name = "ExitProcess";
+        // scope->function_identifiers.emplace_back(
+        //     new Function()
+        // );
+        // scope->function_identifiers.at(0)->name = "ExitProcess";
         // scope->function_identifiers.at(0)->args = 
     }
 
@@ -287,9 +312,10 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_top_scope = false) {
         }
         else if (not chunks.at(i).compare("static")) {
             auto def = new VarDef();
-            def->length = "8"; // CHANGE LATER TO NON FIXED
             def->is_static = true;
             def->name = chunks.at(++i);
+            i += 2;
+            def->length = chunks.at(i);
             Scope::top_scope->identifiers.push_back(shared_ptr<VarDef>(def));
             scope->nodes.push_back(shared_ptr<VarDef>(def));
             if (chunks.at(++i).compare(";")) {
@@ -338,7 +364,17 @@ Scope *parse_chunks(const vector<string>& chunks, bool is_top_scope = false) {
             scope->nodes.push_back(shared_ptr<Function>(func));
             scope->function_identifiers.push_back(shared_ptr<Function>(func));
         }
-
+        else if (not chunks.at(i).compare("using")) {
+            cout << "Found using!" << endl;
+            auto exfunc = new ExternFunction();
+            auto func = new Function();
+            exfunc->name = func->name = chunks.at(++i);
+            scope->function_identifiers.push_back(shared_ptr<Function>(
+                func
+            ));
+            scope->nodes.push_back(shared_ptr<ExternFunction>(exfunc));
+            ++i;
+        }
         else if (not chunks.at(i).compare("call")) {
             cout << "Found a function call of " << chunks.at(i+1) << endl;
             auto call = new Call();
@@ -491,6 +527,12 @@ section .bss
     static string section_text = R"(section .text
 extern ExitProcess
 global start
+
+start:
+    sub rsp, 40
+    call entry
+    add rsp, 40
+    call ExitProcess
 )";
 
     auto i = 0ULL;
@@ -511,6 +553,15 @@ global start
                 section_text.append("\n");
             }
                 break;
+            case EXTFUNC:
+            {
+                auto f = inc_cast(ExternFunction);
+
+                section_text.append(
+                    "extern " + f->name + "\n"
+                );
+            }
+                break;
             case CALL:
             {
                 auto c = inc_cast(Call);
@@ -522,15 +573,14 @@ global start
                 }
 
                 section_text.append(
-                    "call " + c->of_what->name +
-                    "\n"
+                    "call " + c->of_what->name + "\n"
                 );
 
-                for (auto& arg : c->args) {
-                    section_text.append(
-                        "pop r15\n"
-                    );
-                }
+                // for (auto& arg : c->args) {
+                //     section_text.append(
+                //         "pop r15\n"
+                //     );
+                // }
             }
                 break;
             case ASSEMBLY:
@@ -624,7 +674,7 @@ vector<string> split(const string& input) {
         string buffer = "";
 
         if (std ::isalpha(input.at(i))) {
-           while (std ::isalpha(input.at(i))) {
+           while (std ::isalnum(input.at(i))) {
               buffer += input.at(i);
               i += 1;
            }
@@ -648,7 +698,10 @@ vector<string> split(const string& input) {
             continue;
         }
         if (MACROS.find(buffer) != MACROS.end()) {
-            buffer = MACROS.at(buffer);
+            vector<string>replaced(split(MACROS.at(buffer)));
+            for (auto& r : replaced) output.emplace_back(r);
+            cout << "Found macro, buffer is now " << buffer << endl;
+            continue;
         }
         output.emplace_back(buffer);
     }
